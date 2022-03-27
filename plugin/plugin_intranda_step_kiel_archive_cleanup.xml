@@ -12,10 +12,16 @@
         <project>*</project>
         <step>*</step>
         
-        <!-- sample parameter -->
-        <value>test</value>
-        <!-- display button to finish the task directly from within the entered plugin -->
-        <allowTaskFinishButtons>true</allowTaskFinishButtons>
+        <!-- folder where to import images from -->
+        <importFolder>/opt/digiverso/import/kiel/</importFolder>
+        
+        <!-- field to split for size information -->
+        <splitSizeSource>SizeSourcePrint</splitSizeSource>
+        <splitSizeTargetWidth>MapWidth</splitSizeTargetWidth>
+        <splitSizeTargetLength>MapLength</splitSizeTargetLength>
+        <splitSizeTargetScale>MapScale</splitSizeTargetScale>
+        
+        
     </config>
 
 </config_plugin>
