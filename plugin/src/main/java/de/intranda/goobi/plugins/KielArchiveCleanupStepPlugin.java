@@ -1,6 +1,10 @@
 package de.intranda.goobi.plugins;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 
 /**
@@ -23,10 +27,7 @@ import java.util.ArrayList;
  */
 
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.apache.commons.lang3.StringUtils;
@@ -36,14 +37,11 @@ import org.goobi.production.enums.PluginReturnValue;
 import org.goobi.production.enums.PluginType;
 import org.goobi.production.enums.StepReturnValue;
 import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
-import org.goobi.vocabulary.Field;
-import org.goobi.vocabulary.VocabRecord;
-import org.goobi.vocabulary.Vocabulary;
 
 import de.sub.goobi.config.ConfigPlugins;
+import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
-import de.sub.goobi.persistence.managers.VocabularyManager;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
@@ -64,25 +62,25 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
     private String title = "intranda_step_kiel_archive_cleanup";
     @Getter
     private Step step;
-    private String importFolder;
-    private String splitSizeSource;
-    private String splitSizeTargetWidth;
-    private String splitSizeTargetLength;
-    private String splitSizeTargetScale;
+    private String size;
+    private String sizeWidth;
+    private String sizeLength;
+    private String sizeScale;
     private String returnPath;
-
+    private SubnodeConfiguration myconfig; 
+    
     @Override
     public void initialize(Step step, String returnPath) {
         this.returnPath = returnPath;
         this.step = step;
                 
         // read parameters from correct block in configuration file
-        SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        importFolder = myconfig.getString("importFolder"); 
-        splitSizeSource = myconfig.getString("splitSizeSource"); 
-        splitSizeTargetWidth = myconfig.getString("splitSizeTargetWidth"); 
-        splitSizeTargetLength = myconfig.getString("splitSizeTargetLength"); 
-        splitSizeTargetScale = myconfig.getString("splitSizeTargetScale"); 
+        myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
+        
+        size = myconfig.getString("size"); 
+        sizeWidth = myconfig.getString("sizeWidth"); 
+        sizeLength = myconfig.getString("sizeLength"); 
+        sizeScale = myconfig.getString("sizeScale"); 
         
         log.info("KielArchiveCleanup step plugin initialized");
     }
@@ -147,9 +145,9 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
             // delete existing metadata of defined type
             List<Metadata> originalMetadata = new ArrayList<>();
             for (Metadata md : logical.getAllMetadata()) {
-            	if (md.getType().getName().equals(splitSizeTargetWidth) || 
-                		md.getType().getName().equals(splitSizeTargetLength) || 
-                		md.getType().getName().equals(splitSizeTargetScale)) {
+            	if (md.getType().getName().equals(sizeWidth) || 
+                		md.getType().getName().equals(sizeLength) || 
+                		md.getType().getName().equals(sizeScale)) {
                     originalMetadata.add(md);
                 }
             }
@@ -157,30 +155,29 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
 				logical.removeMetadata(metadata);
 			}
             
-            // find out all classes that shall be assigned
+            // find out content from source field
             String content = "";
             for (Metadata md : logical.getAllMetadata()) {
-                if (md.getType().getName().equals(splitSizeSource)) {
+                if (md.getType().getName().equals(size)) {
                 	content = md.getValue();
                 } 
             }
 
+            // split content into width, length and scale
             String myWidth = "";
             String myLength = "";
             String myScale = "";
-            
             //String[] words = content.split("\\s+");
     		String[] words = content.split("\\s{3,6}");
     		for (String s : words) {
     			if (StringUtils.isNotBlank(s)) {
-    				
-    				if (s.startsWith("Breite")) {
+    				if (s.startsWith(myconfig.getString("termWidth"))) {
     					myWidth = getStringValueForField(s);
     				}
-    				if (s.startsWith("Länge")) {
+    				if (s.startsWith(myconfig.getString("termLength"))) {
     					myLength = getStringValueForField(s);
     				}
-    				if (s.startsWith("Maßstab")) {
+    				if (s.startsWith(myconfig.getString("termScale"))) {
     					myScale = getStringValueForField(s);
     				}
     			}
@@ -188,23 +185,59 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
             
             //finally add all matching classes as new metadata
             if (StringUtils.isNotBlank(myWidth)) {
-            	Metadata md = new Metadata(prefs.getMetadataTypeByName(splitSizeTargetWidth));
+            	Metadata md = new Metadata(prefs.getMetadataTypeByName(sizeWidth));
 	        	md.setValue(myWidth);
 	        	logical.addMetadata(md);            	
             }
             if (StringUtils.isNotBlank(myLength)) {
-            	Metadata md = new Metadata(prefs.getMetadataTypeByName(splitSizeTargetLength));
+            	Metadata md = new Metadata(prefs.getMetadataTypeByName(sizeLength));
 	        	md.setValue(myLength);
 	        	logical.addMetadata(md);            	
             }
             if (StringUtils.isNotBlank(myScale)) {
-            	Metadata md = new Metadata(prefs.getMetadataTypeByName(splitSizeTargetScale));
+            	Metadata md = new Metadata(prefs.getMetadataTypeByName(sizeScale));
 	        	md.setValue(myScale);
 	        	logical.addMetadata(md);            	
             }
 			
             // save the mets file
             step.getProzess().writeMetadataFile(ff);
+            
+            // try to read unit id to find existing image files and copy these over
+            String unitField = myconfig.getString("fieldForImagePrefix");
+            String unitid = "";
+            for (Metadata md : logical.getAllMetadata()) {
+                if (md.getType().getName().equals(unitField)) {
+                	unitid = md.getValue().trim();
+                } 
+            }
+            
+            // if unit id is not blank, try to find images
+            if(StringUtils.isNotBlank(unitid)) {
+            	// get a prefix for image files
+            	String imagePrefix = getFileNameForUnitId(unitid);
+            	
+            	// if image prefix is not blank find matching files
+            	if (StringUtils.isNotBlank(imagePrefix)) {
+            		
+            		// create master folder if not there
+            		String targetBase = step.getProzess().getImagesOrigDirectory(false);
+            		StorageProvider.getInstance().createDirectories(Paths.get(targetBase));
+            		
+            		// run through all import files to find images that start with imageprefix in filename
+            		String importFolder = myconfig.getString("importFolder"); 
+            		Path input = Paths.get(importFolder);
+            		List<Path> files = StorageProvider.getInstance().listFiles(input.toString(), kielFilter);
+            		for (Path f : files) {
+            			String filename = f.getFileName().toString();
+	            		if (filename.startsWith(imagePrefix)) {
+	            			StorageProvider.getInstance().copyFile(f,Paths.get(targetBase, filename));  
+	            		}
+            			
+            		}            	
+            	}
+            }
+            
             successful = true;
         } catch (ReadException | PreferencesException | WriteException | IOException | InterruptedException | SwapException | DAOException | MetadataTypeNotAllowedException e) {
             log.error(e);
@@ -218,7 +251,7 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
         return PluginReturnValue.FINISH;
     }
     
-//    public static void main(String[] args) {
+    public static void main(String[] args) {
 //		String content = "Breite in cm: 35                      Länge in cm: 38                      Maßstab: 1:10000";
 //		String myWidth = "";
 //		String myLength = "";
@@ -244,12 +277,48 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
 //        System.out.println("myWidth: " + myWidth);
 //        System.out.println("myLength: " + myLength);
 //        System.out.println("myScale: " + myScale);
-//	}
-//    
+    }
+  
+    /**
+     * Get the content of a string after the first colon and trim it
+     * @param inContent
+     * @return
+     */
     private String getStringValueForField(String inContent) {
     	if (inContent.contains(":")) {
     		return inContent.substring(inContent.indexOf(":") + 1).trim();
     	}
     	return inContent;
     }
+    
+    /**
+     * Generate a 5-digit prefix for image filenames out of unit id
+     * @param unitId
+     * @return
+     */
+    private String getFileNameForUnitId(String unitId) {
+    	String[] sn = unitId.split("\\s+");
+    	String result = "";
+    	if (sn.length>1) {
+    		int number;
+			try {
+				number = Integer.parseInt(sn[1].trim());
+				result = sn[0].trim();
+				result += String.format("%05d", number);
+			} catch (NumberFormatException e) {
+			}
+    	}
+    	return result;
+    }
+    
+    /**
+     * File filter for image files
+     */
+    public static final DirectoryStream.Filter<Path> kielFilter = new DirectoryStream.Filter<Path>() {
+        @Override
+        public boolean accept(Path path) {
+        	String n = path.getFileName().toString();
+            return n.endsWith(".jpeg") || n.endsWith(".jpg") || n.endsWith(".tif") || n.endsWith(".tiff");
+        }
+    };
 }

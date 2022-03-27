@@ -14,13 +14,25 @@
         
         <!-- folder where to import images from -->
         <importFolder>/opt/digiverso/import/kiel/</importFolder>
+		<fieldForImagePrefix>UnitID</fieldForImagePrefix>
         
         <!-- field to split for size information -->
-        <splitSizeSource>SizeSourcePrint</splitSizeSource>
-        <splitSizeTargetWidth>MapWidth</splitSizeTargetWidth>
-        <splitSizeTargetLength>MapLength</splitSizeTargetLength>
-        <splitSizeTargetScale>MapScale</splitSizeTargetScale>
+		<!-- 
+        <size field="SizeSourcePrint">SizeSourcePrint</size>
+        <sizeWidth field="MapWidth" term="Breite">MapWidth</sizeWidth>
+        <sizeLength field="MapLength" term="Länge">MapLength</sizeLength>
+        <sizeScale field="MapScale" term="Maßstab">MapScale</sizeScale>
+		-->
+
+        <size>SizeSourcePrint</size>
         
+        <sizeWidth>MapWidth</sizeWidth>
+        <sizeLength>MapLength</sizeLength>
+        <sizeScale>MapScale</sizeScale>
+        
+        <termWidth>Breite</termWidth>
+        <termLength>Länge</termLength>
+        <termScale>Maßstab</termScale>
         
     </config>
 
