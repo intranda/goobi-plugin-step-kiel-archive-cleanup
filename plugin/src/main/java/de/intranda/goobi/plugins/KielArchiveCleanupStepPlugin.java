@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import org.apache.commons.configuration.SubnodeConfiguration;
+import org.apache.commons.configuration.tree.xpath.XPathExpressionEngine;
 import org.apache.commons.lang3.StringUtils;
 import org.goobi.beans.Step;
 import org.goobi.production.enums.PluginGuiType;
@@ -83,17 +84,35 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
                 
         // read parameters from correct block in configuration file
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
+        myconfig.setExpressionEngine(new XPathExpressionEngine());
         
-        size = myconfig.getString("size"); 
-        sizeWidth = myconfig.getString("sizeWidth"); 
-        sizeLength = myconfig.getString("sizeLength"); 
-        sizeScale = myconfig.getString("sizeScale"); 
-        termWidth = myconfig.getString("termWidth"); 
-        termLength = myconfig.getString("termLength"); 
-        termScale = myconfig.getString("termScale"); 
-   		stepsToSkipIfImagesAvailable = myconfig.getList("stepToSkipIfImagesAvailable"); 
-   		importFolder = myconfig.getString("importFolder");
-   		fieldForImagePrefix = myconfig.getString("fieldForImagePrefix");
+        size = myconfig.getString("/size/@field"); 
+        sizeWidth = myconfig.getString("/sizeWidth/@field"); 
+        sizeLength = myconfig.getString("/sizeLength/@field"); 
+        sizeScale = myconfig.getString("/sizeScale/@field"); 
+        
+        termWidth = myconfig.getString("/sizeWidth/@term"); 
+        termLength = myconfig.getString("/sizeLength/@term"); 
+        termScale = myconfig.getString("/sizeScale/@term"); 
+   		
+        stepsToSkipIfImagesAvailable = myconfig.getList("/stepToSkipIfImagesAvailable"); 
+   		importFolder = myconfig.getString("/importFolder");
+   		fieldForImagePrefix = myconfig.getString("/fieldForImagePrefix");
+   		
+   		
+   		
+   		
+        
+//        size = myconfig.getString("size"); 
+//        sizeWidth = myconfig.getString("sizeWidth"); 
+//        sizeLength = myconfig.getString("sizeLength"); 
+//        sizeScale = myconfig.getString("sizeScale"); 
+//        termWidth = myconfig.getString("termWidth"); 
+//        termLength = myconfig.getString("termLength"); 
+//        termScale = myconfig.getString("termScale"); 
+//   		stepsToSkipIfImagesAvailable = myconfig.getList("stepToSkipIfImagesAvailable"); 
+//   		importFolder = myconfig.getString("importFolder");
+//   		fieldForImagePrefix = myconfig.getString("fieldForImagePrefix");
         log.info("KielArchiveCleanup step plugin initialized");
     }
 
