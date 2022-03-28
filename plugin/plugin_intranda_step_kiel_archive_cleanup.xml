@@ -14,7 +14,12 @@
         
         <!-- folder where to import images from -->
         <importFolder>/opt/digiverso/import/kiel/</importFolder>
+
+		<!-- METS field which contains the map ID that can be used to automatically find the images for the process -->		
 		<fieldForImagePrefix>UnitID</fieldForImagePrefix>
+        
+        <!-- Name of workflow steps which shall be deactivated if image files were found -->
+        <stepToSkipIfImagesAvailable>Bilder einspielen</stepToSkipIfImagesAvailable>
         
         <!-- field to split for size information -->
 		<!-- 
@@ -24,12 +29,15 @@
         <sizeScale field="MapScale" term="Maßstab">MapScale</sizeScale>
 		-->
 
+		<!-- METS field that contains width, length and scale to be splitted into individual fields -->
         <size>SizeSourcePrint</size>
         
+        <!--  METS fields to create from splitted size field -->
         <sizeWidth>MapWidth</sizeWidth>
         <sizeLength>MapLength</sizeLength>
         <sizeScale>MapScale</sizeScale>
         
+        <!-- Terms to use for splitting the size field (used as "startsWith") -->
         <termWidth>Breite</termWidth>
         <termLength>Länge</termLength>
         <termScale>Maßstab</termScale>

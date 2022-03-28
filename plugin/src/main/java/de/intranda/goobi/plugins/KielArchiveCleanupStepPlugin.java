@@ -40,8 +40,10 @@ import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
 import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.helper.StorageProvider;
+import de.sub.goobi.helper.enums.StepStatus;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
+import de.sub.goobi.persistence.managers.StepManager;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
@@ -67,7 +69,12 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
     private String sizeLength;
     private String sizeScale;
     private String returnPath;
-    private SubnodeConfiguration myconfig; 
+    private String importFolder;
+    private String termWidth;
+    private String termLength;
+    private String termScale;
+    private List<Object> stepsToSkipIfImagesAvailable;
+    private String fieldForImagePrefix;
     
     @Override
     public void initialize(Step step, String returnPath) {
@@ -75,13 +82,18 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
         this.step = step;
                 
         // read parameters from correct block in configuration file
-        myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
+        SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
         
         size = myconfig.getString("size"); 
         sizeWidth = myconfig.getString("sizeWidth"); 
         sizeLength = myconfig.getString("sizeLength"); 
         sizeScale = myconfig.getString("sizeScale"); 
-        
+        termWidth = myconfig.getString("termWidth"); 
+        termLength = myconfig.getString("termLength"); 
+        termScale = myconfig.getString("termScale"); 
+   		stepsToSkipIfImagesAvailable = myconfig.getList("stepToSkipIfImagesAvailable"); 
+   		importFolder = myconfig.getString("importFolder");
+   		fieldForImagePrefix = myconfig.getString("fieldForImagePrefix");
         log.info("KielArchiveCleanup step plugin initialized");
     }
 
@@ -171,13 +183,13 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
     		String[] words = content.split("\\s{3,6}");
     		for (String s : words) {
     			if (StringUtils.isNotBlank(s)) {
-    				if (s.startsWith(myconfig.getString("termWidth"))) {
+    				if (s.startsWith(termWidth)) {
     					myWidth = getStringValueForField(s);
     				}
-    				if (s.startsWith(myconfig.getString("termLength"))) {
+    				if (s.startsWith(termLength)) {
     					myLength = getStringValueForField(s);
     				}
-    				if (s.startsWith(myconfig.getString("termScale"))) {
+    				if (s.startsWith(termScale)) {
     					myScale = getStringValueForField(s);
     				}
     			}
@@ -204,16 +216,16 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
             step.getProzess().writeMetadataFile(ff);
             
             // try to read unit id to find existing image files and copy these over
-            String unitField = myconfig.getString("fieldForImagePrefix");
             String unitid = "";
             for (Metadata md : logical.getAllMetadata()) {
-                if (md.getType().getName().equals(unitField)) {
+                if (md.getType().getName().equals(fieldForImagePrefix)) {
                 	unitid = md.getValue().trim();
                 } 
             }
             
             // if unit id is not blank, try to find images
             if(StringUtils.isNotBlank(unitid)) {
+            	boolean imagesFound = false;
             	// get a prefix for image files
             	String imagePrefix = getFileNameForUnitId(unitid);
             	
@@ -225,16 +237,29 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
             		StorageProvider.getInstance().createDirectories(Paths.get(targetBase));
             		
             		// run through all import files to find images that start with imageprefix in filename
-            		String importFolder = myconfig.getString("importFolder"); 
             		Path input = Paths.get(importFolder);
             		List<Path> files = StorageProvider.getInstance().listFiles(input.toString(), kielFilter);
             		for (Path f : files) {
             			String filename = f.getFileName().toString();
 	            		if (filename.startsWith(imagePrefix)) {
-	            			StorageProvider.getInstance().copyFile(f,Paths.get(targetBase, filename));  
+	            			StorageProvider.getInstance().copyFile(f,Paths.get(targetBase, filename));
+	            			imagesFound = true;
 	            		}
             			
-            		}            	
+            		}
+            	}
+            	
+            	// if images were found and copied over then deactivate some workflow steps 
+            	if (imagesFound) {
+            		for (Object o : stepsToSkipIfImagesAvailable) {
+						String os = (String) o;
+						for (Step s : step.getProzess().getSchritteList()) {
+	                        if (s.getTitel().equals(os)) {
+	                            s.setBearbeitungsstatusEnum(StepStatus.DEACTIVATED);
+	                            StepManager.saveStep(s);
+	                        }
+	                    }
+					}
             	}
             }
             
@@ -250,34 +275,7 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
         }
         return PluginReturnValue.FINISH;
     }
-    
-    public static void main(String[] args) {
-//		String content = "Breite in cm: 35                      Länge in cm: 38                      Maßstab: 1:10000";
-//		String myWidth = "";
-//		String myLength = "";
-//		String myScale = "";
-//		
-//		//String[] words = content.split("\\s+");
-//		String[] words = content.split("\\s{3,6}");
-//		for (String s : words) {
-//			if (StringUtils.isNotBlank(s)) {
-//				
-//				if (s.startsWith("Breite")) {
-//					myWidth = getStringValueForField(s);
-//				}
-//				if (s.startsWith("Länge")) {
-//					myLength = getStringValueForField(s);
-//				}
-//				if (s.startsWith("Maßstab")) {
-//					myScale = getStringValueForField(s);
-//				}
-//			}
-//		}
-//		
-//        System.out.println("myWidth: " + myWidth);
-//        System.out.println("myLength: " + myLength);
-//        System.out.println("myScale: " + myScale);
-    }
+
   
     /**
      * Get the content of a string after the first colon and trim it
