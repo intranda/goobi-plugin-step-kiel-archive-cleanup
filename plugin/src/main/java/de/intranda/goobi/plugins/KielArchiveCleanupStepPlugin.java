@@ -51,6 +51,7 @@ import net.xeoh.plugins.base.annotations.PluginImplementation;
 import ugh.dl.DocStruct;
 import ugh.dl.Fileformat;
 import ugh.dl.Metadata;
+import ugh.dl.Person;
 import ugh.dl.Prefs;
 import ugh.exceptions.MetadataTypeNotAllowedException;
 import ugh.exceptions.PreferencesException;
@@ -74,8 +75,11 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
     private String termWidth;
     private String termLength;
     private String termScale;
+    private String creatorSource;
+    private String creatorTarget; 
     private List<Object> stepsToSkipIfImagesAvailable;
     private String fieldForImagePrefix;
+    SubnodeConfiguration myconfig;
     
     @Override
     public void initialize(Step step, String returnPath) {
@@ -83,7 +87,7 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
         this.step = step;
                 
         // read parameters from correct block in configuration file
-        SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
+        myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
         myconfig.setExpressionEngine(new XPathExpressionEngine());
         
         size = myconfig.getString("/size/@field"); 
@@ -95,14 +99,13 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
         termLength = myconfig.getString("/sizeLength/@term"); 
         termScale = myconfig.getString("/sizeScale/@term"); 
    		
+        creatorSource = myconfig.getString("/creator/@source"); 
+        creatorTarget = myconfig.getString("/creator/@target"); 
+   		
         stepsToSkipIfImagesAvailable = myconfig.getList("/stepToSkipIfImagesAvailable"); 
    		importFolder = myconfig.getString("/importFolder");
    		fieldForImagePrefix = myconfig.getString("/fieldForImagePrefix");
    		
-   		
-   		
-   		
-        
 //        size = myconfig.getString("size"); 
 //        sizeWidth = myconfig.getString("sizeWidth"); 
 //        sizeLength = myconfig.getString("sizeLength"); 
@@ -174,63 +177,98 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
             }
             
             // delete existing metadata of defined type
-            List<Metadata> originalMetadata = new ArrayList<>();
-            for (Metadata md : logical.getAllMetadata()) {
-            	if (md.getType().getName().equals(sizeWidth) || 
-                		md.getType().getName().equals(sizeLength) || 
-                		md.getType().getName().equals(sizeScale)) {
-                    originalMetadata.add(md);
-                }
+            if (logical.getAllMetadata() != null) {
+	            List<Metadata> originalMetadata = new ArrayList<>();
+	            for (Metadata md : logical.getAllMetadata()) {
+	            	if (md.getType().getName().equals(sizeWidth) || 
+	                		md.getType().getName().equals(sizeLength) || 
+	                		md.getType().getName().equals(sizeScale)) {
+	                    originalMetadata.add(md);
+	                }
+	            }
+	            for (Metadata metadata : originalMetadata) {
+					logical.removeMetadata(metadata);
+				}
             }
-            for (Metadata metadata : originalMetadata) {
-				logical.removeMetadata(metadata);
-			}
             
-            // find out content from source field
-            String content = "";
+            // find out size information from source field
+            List<Metadata> metadatalist = new ArrayList<Metadata>();
             for (Metadata md : logical.getAllMetadata()) {
                 if (md.getType().getName().equals(size)) {
-                	content = md.getValue();
+                	// split content into width, length and scale
+                	String content = md.getValue();
+                    //String[] words = content.split("\\s+");
+            		String[] words = content.split("\\s{3,6}");
+            		for (String s : words) {
+            			if (StringUtils.isNotBlank(s)) {
+            				if (s.startsWith(termWidth)) {
+            					Metadata m = new Metadata(prefs.getMetadataTypeByName(sizeWidth));
+            		        	m.setValue(getStringValueForField(s));
+            		        	metadatalist.add(m);
+            				}
+            				if (s.startsWith(termLength)) {
+            					Metadata m = new Metadata(prefs.getMetadataTypeByName(sizeLength));
+            		        	m.setValue(getStringValueForField(s));
+            		        	metadatalist.add(m);
+            				}
+            				if (s.startsWith(termScale)) {
+            					Metadata m = new Metadata(prefs.getMetadataTypeByName(sizeScale));
+            		        	m.setValue(getStringValueForField(s));
+            		        	metadatalist.add(m);
+            				}
+            			}
+            		}
                 } 
             }
-
-            // split content into width, length and scale
-            String myWidth = "";
-            String myLength = "";
-            String myScale = "";
-            //String[] words = content.split("\\s+");
-    		String[] words = content.split("\\s{3,6}");
-    		for (String s : words) {
-    			if (StringUtils.isNotBlank(s)) {
-    				if (s.startsWith(termWidth)) {
-    					myWidth = getStringValueForField(s);
-    				}
-    				if (s.startsWith(termLength)) {
-    					myLength = getStringValueForField(s);
-    				}
-    				if (s.startsWith(termScale)) {
-    					myScale = getStringValueForField(s);
-    				}
-    			}
-    		}
+            for (Metadata m : metadatalist) {
+				logical.addMetadata(m); 
+			}
+                        
+            // delete existing persons of defined type
+            if (logical.getAllPersons() != null) {
+            	List<Person> originalPersons = new ArrayList<>();
+            	for (Person p : logical.getAllPersons()) {
+            		if (p.getType().getName().equals(creatorTarget)) {
+            			originalPersons.add(p);
+            		}
+            	}
+            	for (Person p : originalPersons) {
+            		logical.removePerson(p);
+            	}
+            }
             
-            //finally add all matching classes as new metadata
-            if (StringUtils.isNotBlank(myWidth)) {
-            	Metadata md = new Metadata(prefs.getMetadataTypeByName(sizeWidth));
-	        	md.setValue(myWidth);
-	        	logical.addMetadata(md);            	
+            // search for person information to move these into persons
+            List<Person> persons = new ArrayList<Person>();
+            for (Metadata md : logical.getAllMetadata()) {
+                if (md.getType().getName().equals(creatorSource)) {
+                	Person p = new Person(prefs.getMetadataTypeByName(creatorTarget));
+                	// get field content to split it
+                	String lastname = md.getValue();
+                    String identifier = "";
+                    String firstname = "";
+                    if (lastname.contains("|")) {
+                    	int i = lastname.indexOf("|");
+                    	identifier = lastname.substring(i + 1).trim();
+                    	lastname = lastname.substring(0,i);
+                    }
+                	if (lastname.contains(",")) {
+                		int i = lastname.indexOf(",");
+                    	firstname = lastname.substring(i + 1).trim();
+                    	lastname = lastname.substring(0,i).trim();
+                	}
+                	p.setLastname(lastname);
+                	p.setFirstname(firstname);
+                	if (StringUtils.isNotBlank(identifier)) {
+                		p.setAutorityFile("gnd", "http://d-nb.info/gnd/", identifier);
+                	}
+                	persons.add(p);
+                }
             }
-            if (StringUtils.isNotBlank(myLength)) {
-            	Metadata md = new Metadata(prefs.getMetadataTypeByName(sizeLength));
-	        	md.setValue(myLength);
-	        	logical.addMetadata(md);            	
-            }
-            if (StringUtils.isNotBlank(myScale)) {
-            	Metadata md = new Metadata(prefs.getMetadataTypeByName(sizeScale));
-	        	md.setValue(myScale);
-	        	logical.addMetadata(md);            	
-            }
-			
+            for (Person p : persons) {
+            	logical.addPerson(p);       
+			}
+            
+            
             // save the mets file
             step.getProzess().writeMetadataFile(ff);
             

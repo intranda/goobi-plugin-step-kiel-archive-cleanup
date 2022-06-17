@@ -29,6 +29,8 @@
         <sizeLength field="MapLength" term="Länge"/>
         <sizeScale field="MapScale" term="Maßstab"/>
         
+        <creator source="ProvenienceIndex" target="Author"/>
+        
     </config>
 
 </config_plugin>
