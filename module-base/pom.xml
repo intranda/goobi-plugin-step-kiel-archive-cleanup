@@ -2,9 +2,9 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>io.goobi.workflow.plugin</groupId>
-    <artifactId>plugin-step-kiel_archive_cleanup</artifactId>
+    <artifactId>plugin-step-kiel-archive-cleanup</artifactId>
     <version>24.03-SNAPSHOT</version>
   </parent>
-  <artifactId>plugin-step-kiel_archive_cleanup-base</artifactId>
+  <artifactId>plugin-step-kiel-archive-cleanup-base</artifactId>
   <packaging>jar</packaging>
 </project>

@@ -7,7 +7,7 @@
     <relativePath />
   </parent>
   <groupId>io.goobi.workflow.plugin</groupId>
-  <artifactId>plugin-step-kiel_archive_cleanup</artifactId>
+  <artifactId>plugin-step-kiel-archive-cleanup</artifactId>
   <packaging>pom</packaging>
   <modules>
     <module>module-base</module>
