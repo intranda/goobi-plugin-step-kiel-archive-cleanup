@@ -15,8 +15,8 @@ Detail                      | Description
 **Plugin identifier**       | intranda_step_kiel_archive_cleanup
 **Plugin type**             | step
 **Licence**                 | GPL 2.0 or newer
-**Documentation (German)**  | https://docs.goobi.io/workflow-plugins/v/eng/step/goobi-plugin-step-kiel-archive-cleanup
-**Documentation (English)** | https://docs.goobi.io/workflow-plugins/v/ger/step/goobi-plugin-step-kiel-archive-cleanup
+**Documentation (German)**  | https://docs.goobi.io/workflow-plugins/v/ger/step/goobi-plugin-step-kiel-archive-cleanup
+**Documentation (English)** | https://docs.goobi.io/workflow-plugins/v/eng/step/goobi-plugin-step-kiel-archive-cleanup
 
 ## Goobi details
 
