@@ -27,6 +27,7 @@ import java.util.ArrayList;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.apache.commons.configuration.tree.xpath.XPathExpressionEngine;
@@ -47,11 +48,7 @@ import de.sub.goobi.persistence.managers.StepManager;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
-import ugh.dl.DocStruct;
-import ugh.dl.Fileformat;
-import ugh.dl.Metadata;
-import ugh.dl.Person;
-import ugh.dl.Prefs;
+import ugh.dl.*;
 import ugh.exceptions.MetadataTypeNotAllowedException;
 import ugh.exceptions.PreferencesException;
 import ugh.exceptions.ReadException;
@@ -61,21 +58,18 @@ import ugh.exceptions.WriteException;
 @Log4j2
 public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
 
+    public static final String PERSON_REFERENCE_TYPE = "PersonReference";
+    public static final String OTHER_PERSON_TYPE = "OtherPerson";
+    public static final String CORPORATE_REFERENCE_TYPE = "CorporateReference";
+    private static final String OTHER_CORPORATE_TYPE = "CorporateOther";
+    private static final Set<String> GND_TYPES = Set.of("Location", "SubjectTopic");
     @Getter
     private String title = "intranda_step_kiel_archive_cleanup";
     @Getter
     private Step step;
     private String size;
-    private String sizeWidth;
-    private String sizeLength;
-    private String sizeScale;
     private String returnPath;
     private String importFolder;
-    private String termWidth;
-    private String termLength;
-    private String termScale;
-    private String creatorSource;
-    private String creatorTarget;
     private List<Object> stepsToSkipIfImagesAvailable;
     private String fieldForImagePrefix;
     SubnodeConfiguration myconfig;
@@ -90,31 +84,11 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
         myconfig.setExpressionEngine(new XPathExpressionEngine());
 
         size = myconfig.getString("/size/@field");
-        sizeWidth = myconfig.getString("/sizeWidth/@field");
-        sizeLength = myconfig.getString("/sizeLength/@field");
-        sizeScale = myconfig.getString("/sizeScale/@field");
-
-        termWidth = myconfig.getString("/sizeWidth/@term");
-        termLength = myconfig.getString("/sizeLength/@term");
-        termScale = myconfig.getString("/sizeScale/@term");
-
-        creatorSource = myconfig.getString("/creator/@source");
-        creatorTarget = myconfig.getString("/creator/@target");
 
         stepsToSkipIfImagesAvailable = myconfig.getList("/stepToSkipIfImagesAvailable");
         importFolder = myconfig.getString("/importFolder");
         fieldForImagePrefix = myconfig.getString("/fieldForImagePrefix");
 
-        //        size = myconfig.getString("size");
-        //        sizeWidth = myconfig.getString("sizeWidth");
-        //        sizeLength = myconfig.getString("sizeLength");
-        //        sizeScale = myconfig.getString("sizeScale");
-        //        termWidth = myconfig.getString("termWidth");
-        //        termLength = myconfig.getString("termLength");
-        //        termScale = myconfig.getString("termScale");
-        //   		stepsToSkipIfImagesAvailable = myconfig.getList("stepToSkipIfImagesAvailable");
-        //   		importFolder = myconfig.getString("importFolder");
-        //   		fieldForImagePrefix = myconfig.getString("fieldForImagePrefix");
         log.info("KielArchiveCleanup step plugin initialized");
     }
 
@@ -175,58 +149,11 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
                 logical = logical.getAllChildren().get(0);
             }
 
-            // delete existing metadata of defined type
-            if (logical.getAllMetadata() != null) {
-                List<Metadata> originalMetadata = new ArrayList<>();
-                for (Metadata md : logical.getAllMetadata()) {
-                    if (md.getType().getName().equals(sizeWidth) || md.getType().getName().equals(sizeLength)
-                            || md.getType().getName().equals(sizeScale)) {
-                        originalMetadata.add(md);
-                    }
-                }
-                for (Metadata metadata : originalMetadata) {
-                    logical.removeMetadata(metadata);
-                }
-            }
-
-            // find out size information from source field
-            List<Metadata> metadatalist = new ArrayList<>();
-            for (Metadata md : logical.getAllMetadata()) {
-                if (md.getType().getName().equals(size)) {
-                    // split content into width, length and scale
-                    String content = md.getValue();
-                    //String[] words = content.split("\\s+");
-                    String[] words = content.split("\\s{3,6}");
-                    for (String s : words) {
-                        if (StringUtils.isNotBlank(s)) {
-                            if (s.startsWith(termWidth)) {
-                                Metadata m = new Metadata(prefs.getMetadataTypeByName(sizeWidth));
-                                m.setValue(getStringValueForField(s));
-                                metadatalist.add(m);
-                            }
-                            if (s.startsWith(termLength)) {
-                                Metadata m = new Metadata(prefs.getMetadataTypeByName(sizeLength));
-                                m.setValue(getStringValueForField(s));
-                                metadatalist.add(m);
-                            }
-                            if (s.startsWith(termScale)) {
-                                Metadata m = new Metadata(prefs.getMetadataTypeByName(sizeScale));
-                                m.setValue(getStringValueForField(s));
-                                metadatalist.add(m);
-                            }
-                        }
-                    }
-                }
-            }
-            for (Metadata m : metadatalist) {
-                logical.addMetadata(m);
-            }
-
             // delete existing persons of defined type
             if (logical.getAllPersons() != null) {
                 List<Person> originalPersons = new ArrayList<>();
                 for (Person p : logical.getAllPersons()) {
-                    if (p.getType().getName().equals(creatorTarget)) {
+                    if (p.getType().getName().equals(OTHER_PERSON_TYPE)) {
                         originalPersons.add(p);
                     }
                 }
@@ -235,18 +162,32 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
                 }
             }
 
+            // delete existing corporates of defined type
+            if (logical.getAllCorporates() != null) {
+                List<Corporate> originalCorporates = new ArrayList<>();
+                for (Corporate c : logical.getAllCorporates()) {
+                    if (c.getType().getName().equals(OTHER_CORPORATE_TYPE)) {
+                        originalCorporates.add(c);
+                    }
+                }
+                for (Corporate c : originalCorporates) {
+                    logical.removeCorporate(c);
+                }
+            }
+
             // search for person information to move these into persons
             List<Person> persons = new ArrayList<>();
+            List<Metadata> personMetadata = new ArrayList<>();
             for (Metadata md : logical.getAllMetadata()) {
-                if (md.getType().getName().equals(creatorSource)) {
-                    Person p = new Person(prefs.getMetadataTypeByName(creatorTarget));
+                if (md.getType().getName().equals(PERSON_REFERENCE_TYPE)) {
+                    Person p = new Person(prefs.getMetadataTypeByName(OTHER_PERSON_TYPE));
                     // get field content to split it
                     String lastname = md.getValue();
                     String identifier = "";
                     String firstname = "";
-                    if (lastname.contains("|")) {
-                        int i = lastname.indexOf("|");
-                        identifier = lastname.substring(i + 1).trim();
+                    if (lastname.contains(" GND:")) {
+                        int i = lastname.indexOf(" GND:");
+                        identifier = lastname.substring(i + 5).trim();
                         lastname = lastname.substring(0, i);
                     }
                     if (lastname.contains(",")) {
@@ -260,10 +201,56 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
                         p.setAutorityFile("gnd", "http://d-nb.info/gnd/", identifier);
                     }
                     persons.add(p);
+                    personMetadata.add(md);
                 }
             }
             for (Person p : persons) {
                 logical.addPerson(p);
+            }
+            personMetadata.forEach(logical::removeMetadata);
+
+            // search for corporate information to move these into corporates
+            List<Corporate> corporates = new ArrayList<>();
+            List<Metadata> corporateMetadata = new ArrayList<>();
+            for (Metadata md : logical.getAllMetadata()) {
+                if (md.getType().getName().equals(CORPORATE_REFERENCE_TYPE)) {
+                    Corporate c = new Corporate(prefs.getMetadataTypeByName(OTHER_CORPORATE_TYPE));
+                    // get field content to split it
+                    String mainName = md.getValue();
+                    String identifier = "";
+                    if (mainName.contains(" GND:")) {
+                        int i = mainName.indexOf(" GND:");
+                        identifier = mainName.substring(i + 5).trim();
+                        mainName = mainName.substring(0, i);
+                    }
+                    c.setMainName(mainName);
+                    if (StringUtils.isNotBlank(identifier)) {
+                        c.setAutorityFile("gnd", "http://d-nb.info/gnd/", identifier);
+                    }
+                    corporates.add(c);
+                    corporateMetadata.add(md);
+                }
+            }
+            for (Corporate c : corporates) {
+                logical.addCorporate(c);
+            }
+            corporateMetadata.forEach(logical::removeMetadata);
+
+            // search for location information and process GND ids
+            for (Metadata md : logical.getAllMetadata()) {
+                if (GND_TYPES.contains(md.getType().getName())) {
+                    String value = md.getValue();
+                    String identifier = "";
+                    if (value.contains(" GND:")) {
+                        int i = value.indexOf(" GND:");
+                        identifier = value.substring(i + 5).trim();
+                        value = value.substring(0, i);
+                    }
+                    md.setValue(value);
+                    if (StringUtils.isNotBlank(identifier)) {
+                        md.setAutorityFile("gnd", "http://d-nb.info/gnd/", identifier);
+                    }
+                }
             }
 
             // save the mets file
@@ -320,7 +307,7 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
             successful = true;
         } catch (ReadException | PreferencesException | WriteException | IOException | SwapException | DAOException
                 | MetadataTypeNotAllowedException e) {
-            log.error(e);
+            log.error("Error during processing", e);
         }
 
         log.info("KielArchiveCleanup step plugin executed");
@@ -328,19 +315,6 @@ public class KielArchiveCleanupStepPlugin implements IStepPluginVersion2 {
             return PluginReturnValue.ERROR;
         }
         return PluginReturnValue.FINISH;
-    }
-
-    /**
-     * Get the content of a string after the first colon and trim it
-     * 
-     * @param inContent
-     * @return
-     */
-    private String getStringValueForField(String inContent) {
-        if (inContent.contains(":")) {
-            return inContent.substring(inContent.indexOf(":") + 1).trim();
-        }
-        return inContent;
     }
 
     /**
