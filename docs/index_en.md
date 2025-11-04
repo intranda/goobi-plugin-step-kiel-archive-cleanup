@@ -3,6 +3,10 @@ title: Metadata Cleaning
 identifier: intranda_step_kiel_archive_cleanup
 published: true
 description: Goobi Step Plugin for Manipulating and Cleaning Metadata for the City Archive Kiel
+keywords:
+    - Goobi workflow
+    - Plugin
+    - Step Plugin
 ---
 ## Introduction
 This documentation describes the installation, configuration and use of the Step Plugin for cleaning metadata for the Kiel City Archive. In concrete terms, this is about the automated evaluation of metadata that are to be separated into individual fields, such as information on the scales of historical maps. Furthermore, this plugin also copies the corresponding image files into the master folder of the respective process.
