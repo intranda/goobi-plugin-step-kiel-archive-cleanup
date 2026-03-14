@@ -38,7 +38,7 @@ The plugin is usually executed fully automatically within the workflow. It first
 
 This plugin is integrated into the workflow in such a way that it is executed automatically. Manual interaction with the plugin is not necessary. To use it within a step of the workflow, it should be configured as shown in the screenshot below.
 
-![Integration of the plug-in into the workflow](screen1.png)
+![Integration of the plug-in into the workflow](screen1_en.png)
 
 
 ## Configuration
